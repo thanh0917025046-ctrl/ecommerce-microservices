@@ -1,0 +1,19 @@
+{
+  "name": "api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/grpcClients.js && node --check src/redis.js && node --check src/middleware/auth.js && node --check src/routes/authRoutes.js && node --check src/routes/customerRoutes.js && node --check src/routes/productRoutes.js && node --check src/routes/orderRoutes.js && node --check src/routes/shipmentRoutes.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.7.15",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "rate-limit-redis": "^6.0.1",
+    "redis": "^5.8.2"
+  }
+}

@@ -1,0 +1,241 @@
+services:
+  postgres-auth:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: authuser
+      POSTGRES_PASSWORD: authpass
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+      - ./services/auth-service/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authuser -d authdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres-customer:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: customerdb
+      POSTGRES_USER: customeruser
+      POSTGRES_PASSWORD: customerpass
+    volumes:
+      - postgres_customer_data:/var/lib/postgresql/data
+      - ./services/customer-service/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U customeruser -d customerdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres-order:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: orderuser
+      POSTGRES_PASSWORD: orderpass
+    volumes:
+      - postgres_order_data:/var/lib/postgresql/data
+      - ./services/order-service/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderuser -d orderdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo-product:
+    image: mongo:8
+    volumes:
+      - mongo_product_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.runCommand({ ping: 1 }).ok"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo-shipment:
+    image: mongo:8
+    volumes:
+      - mongo_shipment_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.runCommand({ ping: 1 }).ok"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.9.2
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      GRPC_PORT: 50051
+      DATABASE_URL: postgresql://authuser:authpass@postgres-auth:5432/authdb
+      JWT_SECRET: ${JWT_SECRET:-practice-3-local-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+
+  customer-service:
+    build:
+      context: .
+      dockerfile: services/customer-service/Dockerfile
+    environment:
+      GRPC_PORT: 50052
+      DATABASE_URL: postgresql://customeruser:customerpass@postgres-customer:5432/customerdb
+    depends_on:
+      postgres-customer:
+        condition: service_healthy
+
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    environment:
+      GRPC_PORT: 50053
+      MONGO_URL: mongodb://mongo-product:27017/productdb
+    depends_on:
+      mongo-product:
+        condition: service_healthy
+
+  order-service:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      GRPC_PORT: 50054
+      DATABASE_URL: postgresql://orderuser:orderpass@postgres-order:5432/orderdb
+      CUSTOMER_GRPC_URL: customer-service:50052
+      PRODUCT_GRPC_URL: product-service:50053
+      KAFKA_BROKER: kafka:9092
+      ORDER_CREATED_TOPIC: order-created
+      OUTBOX_POLL_MS: 3000
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      customer-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+
+  shipment-service:
+    build:
+      context: .
+      dockerfile: services/shipment-service/Dockerfile
+    environment:
+      GRPC_PORT: 50055
+      MONGO_URL: mongodb://mongo-shipment:27017/shipmentdb
+      KAFKA_BROKER: kafka:9092
+      ORDER_CREATED_TOPIC: order-created
+    depends_on:
+      mongo-shipment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+
+      AUTH_GRPC_URL: auth-service:50051
+      CUSTOMER_GRPC_URL: customer-service:50052
+      PRODUCT_GRPC_URL: product-service:50053
+      ORDER_GRPC_URL: order-service:50054
+      SHIPMENT_GRPC_URL: shipment-service:50055
+
+      REDIS_URL: redis://redis:6379
+
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      customer-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      shipment-service:
+        condition: service_started
+
+volumes:
+  postgres_auth_data:
+  postgres_customer_data:
+  postgres_order_data:
+  mongo_product_data:
+  mongo_shipment_data:
+  redis_data:

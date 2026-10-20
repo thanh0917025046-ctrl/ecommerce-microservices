@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package product;
+
+service ProductService {
+  rpc ListProducts (Empty) returns (ProductListResponse);
+  rpc GetProduct (GetProductRequest) returns (ProductResponse);
+  rpc CreateProduct (CreateProductRequest) returns (ProductResponse);
+  rpc UpdateProduct (UpdateProductRequest) returns (ProductResponse);
+  rpc DeleteProduct (DeleteProductRequest) returns (DeleteProductResponse);
+  rpc ReserveProducts (ReserveProductsRequest) returns (ReserveProductsResponse);
+  rpc RestoreProducts (RestoreProductsRequest) returns (RestoreProductsResponse);
+}
+
+message Empty {}
+
+message Product {
+  int32 pid = 1;
+  string pname = 2;
+  double price = 3;
+  int32 quantity = 4;
+}
+
+message GetProductRequest { int32 pid = 1; }
+message DeleteProductRequest { int32 pid = 1; }
+
+message CreateProductRequest {
+  string pname = 1;
+  double price = 2;
+  int32 quantity = 3;
+}
+
+message UpdateProductRequest {
+  int32 pid = 1;
+  string pname = 2;
+  double price = 3;
+  int32 quantity = 4;
+}
+
+message ProductResponse {
+  Product product = 1;
+  string message = 2;
+}
+
+message ProductListResponse {
+  repeated Product items = 1;
+}
+
+message DeleteProductResponse {
+  bool success = 1;
+  int32 pid = 2;
+  string message = 3;
+}
+
+message ProductQty {
+  int32 pid = 1;
+  int32 qty = 2;
+}
+
+message ReserveProductsRequest {
+  repeated ProductQty items = 1;
+}
+
+message ReservedProduct {
+  int32 pid = 1;
+  string pname = 2;
+  int32 qty = 3;
+  double unit_price = 4;
+}
+
+message ReserveProductsResponse {
+  repeated ReservedProduct items = 1;
+  string message = 2;
+}
+
+message RestoreProductsRequest {
+  repeated ProductQty items = 1;
+}
+
+message RestoreProductsResponse {
+  bool success = 1;
+  string message = 2;
+}

@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package customer;
+
+service CustomerService {
+  rpc EnsureCustomer (EnsureCustomerRequest) returns (CustomerResponse);
+  rpc CreateCustomer (CreateCustomerRequest) returns (CustomerResponse);
+  rpc GetCustomer (GetCustomerRequest) returns (CustomerResponse);
+  rpc ListCustomers (Empty) returns (CustomerListResponse);
+  rpc UpdateCustomer (UpdateCustomerRequest) returns (CustomerResponse);
+  rpc DeleteCustomer (DeleteCustomerRequest) returns (DeleteCustomerResponse);
+  rpc GetMembership (GetMembershipRequest) returns (MembershipResponse);
+}
+
+message Empty {}
+
+message Customer {
+  int32 uid = 1;
+  string fullname = 2;
+  int32 mid = 3;
+}
+
+message Membership {
+  int32 mid = 1;
+  string mname = 2;
+  int32 score = 3;
+}
+
+message EnsureCustomerRequest {
+  int32 uid = 1;
+  string fullname = 2;
+}
+
+message CreateCustomerRequest {
+  int32 uid = 1;
+  string fullname = 2;
+  int32 mid = 3;
+}
+
+message GetCustomerRequest { int32 uid = 1; }
+
+message UpdateCustomerRequest {
+  int32 uid = 1;
+  string fullname = 2;
+  int32 mid = 3;
+}
+
+message DeleteCustomerRequest { int32 uid = 1; }
+message GetMembershipRequest { int32 uid = 1; }
+
+message CustomerResponse {
+  Customer customer = 1;
+  string message = 2;
+}
+
+message CustomerListResponse {
+  repeated Customer customers = 1;
+}
+
+message MembershipResponse {
+  int32 uid = 1;
+  Membership membership = 2;
+  string message = 3;
+}
+
+message DeleteCustomerResponse {
+  bool success = 1;
+  string message = 2;
+}
